@@ -6,6 +6,7 @@ import {
   Activity,
   BarChart3,
   History,
+  KeyRound,
   Settings,
   LineChart,
   Sparkles,
@@ -19,6 +20,7 @@ const items = [
   { href: "/indicators", label: "Indicators", icon: LineChart },
   { href: "/backtest", label: "Backtest", icon: BarChart3 },
   { href: "/ai", label: "AI Filter", icon: Sparkles },
+  { href: "/credentials", label: "Credentials", icon: KeyRound },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 
