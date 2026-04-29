@@ -86,6 +86,8 @@ export function CredentialCard({
         setApiKey("");
         setApiSecret("");
       }
+    } catch (err) {
+      setFeedback({ ok: false, msg: `Network error: ${err instanceof Error ? err.message : String(err)}` });
     } finally {
       setBusy(false);
     }
@@ -98,6 +100,8 @@ export function CredentialCard({
       const result = await testCredential(provider);
       setFeedback({ ok: result.ok, msg: result.message });
       if (result.status) setStatus(result.status);
+    } catch (err) {
+      setFeedback({ ok: false, msg: `Network error: ${err instanceof Error ? err.message : String(err)}` });
     } finally {
       setBusy(false);
     }
@@ -111,7 +115,7 @@ export function CredentialCard({
       setFeedback({ ok: result.ok, msg: result.message });
       if (result.ok) {
         setStatus({
-          ...status,
+          provider: status.provider,
           configured: false,
           last_updated: null,
           last_tested: null,
@@ -121,6 +125,8 @@ export function CredentialCard({
           trade_enabled: null,
         });
       }
+    } catch (err) {
+      setFeedback({ ok: false, msg: `Network error: ${err instanceof Error ? err.message : String(err)}` });
     } finally {
       setBusy(false);
     }
