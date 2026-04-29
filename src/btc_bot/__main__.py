@@ -19,12 +19,27 @@ def run(
         None,
         help="Override BTC_BOT_MODE from .env (backtest | paper | live)",
     ),
+    api_only: bool = typer.Option(
+        False,
+        "--api-only",
+        help="Run only the FastAPI control plane (no scheduler / engine).",
+    ),
 ) -> None:
     """Start the bot in the configured mode."""
     effective = mode or settings.mode
     console.print(f"[bold cyan]Starting bot in mode:[/bold cyan] {effective.value}")
     console.print(f"Enabled exchanges: {settings.enabled_exchanges}")
-    console.print("[yellow]TODO: wire up engine and start scheduler[/yellow]")
+
+    import uvicorn
+    uvicorn.run(
+        "btc_bot.api.main:app",
+        host=settings.api_host,
+        port=settings.api_port,
+        log_level=settings.log_level.lower(),
+        reload=False,
+    )
+    if not api_only:
+        console.print("[yellow]TODO: scheduler runs alongside API in next iteration[/yellow]")
 
 
 @app.command()
