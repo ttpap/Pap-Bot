@@ -27,13 +27,15 @@ venv/
 ENV/
 env/
 
-# Secrets
+# Secrets — only the runtime vault at repo root, not the Python package
 .env
 .env.*
 !.env.example
-secrets/
+/secrets/
 *.pem
+!src/**/*.py
 *.key
+!src/**/*.py
 !*.pub.key
 
 # IDE
