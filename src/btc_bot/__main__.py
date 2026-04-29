@@ -30,6 +30,13 @@ def run(
     console.print(f"[bold cyan]Starting bot in mode:[/bold cyan] {effective.value}")
     console.print(f"Enabled exchanges: {settings.enabled_exchanges}")
 
+    import logging as _logging
+    _logging.basicConfig(
+        level=getattr(_logging, settings.log_level.upper(), _logging.INFO),
+        format="%(asctime)s %(levelname)-8s %(name)s: %(message)s",
+        datefmt="%Y-%m-%dT%H:%M:%SZ",
+    )
+
     import uvicorn
     uvicorn.run(
         "btc_bot.api.main:app",
