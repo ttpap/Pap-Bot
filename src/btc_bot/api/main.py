@@ -70,6 +70,22 @@ def create_app() -> FastAPI:
     @app.on_event("startup")
     async def on_startup() -> None:
         _bootstrap_vault()
+        # Start the trading scheduler (skipped if no exchanges are configured)
+        try:
+            from btc_bot.scheduler import build_scheduler
+            scheduler = build_scheduler()
+            scheduler.start()
+            log.info("scheduler started")
+            app.state.scheduler = scheduler
+        except Exception as exc:
+            log.error("scheduler failed to start: %s", exc)
+
+    @app.on_event("shutdown")
+    async def on_shutdown() -> None:
+        sched = getattr(app.state, "scheduler", None)
+        if sched is not None:
+            sched.shutdown(wait=False)
+            log.info("scheduler stopped")
 
     @app.get("/healthz", tags=["meta"])
     async def healthz() -> dict:
