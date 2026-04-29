@@ -1,8 +1,8 @@
 // API client for the bot's FastAPI service.
-// Set NEXT_PUBLIC_BOT_API_URL to override (default http://localhost:8000).
 //
-// While the bot endpoints are still being built, this client falls back to a
-// deterministic mock so the UI is fully navigable end-to-end.
+// All requests go through the Next.js server-side proxy at /api/bot
+// to avoid CORS, client-bundle env var issues, and key exposure.
+// The proxy injects the X-API-Key server-side.
 
 import type {
   BotStatus,
@@ -15,19 +15,17 @@ import type {
   ProviderId,
 } from "./types";
 
-const BASE = process.env.NEXT_PUBLIC_BOT_API_URL ?? "http://localhost:8000";
-const USE_MOCK = process.env.NEXT_PUBLIC_USE_MOCK !== "false";
-const API_KEY = process.env.NEXT_PUBLIC_BOT_API_KEY ?? "";
-
-function authHeaders(extra: Record<string, string> = {}): Record<string, string> {
-  return { accept: "application/json", "X-API-Key": API_KEY, ...extra };
-}
-
-async function tryFetch<T>(path: string): Promise<T | null> {
-  if (USE_MOCK) return null;
+/** Proxy a request through the Next.js /api/bot route handler. */
+async function botFetch<T>(
+  botPath: string,
+  init?: RequestInit
+): Promise<T | null> {
+  // botPath e.g. "credentials" → /api/bot?path=credentials
+  const url = `/api/bot?path=${encodeURIComponent(botPath)}`;
   try {
-    const res = await fetch(`${BASE}${path}`, {
-      headers: authHeaders(),
+    const res = await fetch(url, {
+      ...init,
+      headers: { "Content-Type": "application/json", ...(init?.headers ?? {}) },
       cache: "no-store",
     });
     if (!res.ok) return null;
@@ -35,6 +33,16 @@ async function tryFetch<T>(path: string): Promise<T | null> {
   } catch {
     return null;
   }
+}
+
+/** Same but throws on error so callers can show a message. */
+async function botMutate<T>(botPath: string, init: RequestInit): Promise<T> {
+  const url = `/api/bot?path=${encodeURIComponent(botPath)}`;
+  const res = await fetch(url, {
+    ...init,
+    headers: { "Content-Type": "application/json", ...(init?.headers ?? {}) },
+  });
+  return (await res.json()) as T;
 }
 
 // ----- mock data ---------------------------------------------------------
@@ -119,37 +127,29 @@ const MOCK_STATUS: BotStatus = {
   ],
 };
 
-const MOCK_TRADES: Trade[] = [
-  // empty until first run
-];
+const MOCK_TRADES: Trade[] = [];
 
-// ----- public API --------------------------------------------------------
+// ----- public API (all via server-side proxy at /api/bot) ----------------
 
 export async function getStatus(): Promise<BotStatus> {
-  return (await tryFetch<BotStatus>("/api/status")) ?? MOCK_STATUS;
+  return (await botFetch<BotStatus>("status")) ?? MOCK_STATUS;
 }
 
 export async function getTrades(limit = 50): Promise<Trade[]> {
-  return (
-    (await tryFetch<Trade[]>(`/api/trades?limit=${limit}`)) ?? MOCK_TRADES
-  );
+  return (await botFetch<Trade[]>(`trades?limit=${limit}`)) ?? MOCK_TRADES;
 }
 
 export async function getGate(): Promise<GateStatus> {
-  return (
-    (await tryFetch<GateStatus>("/api/gate")) ?? MOCK_STATUS.gate
-  );
+  return (await botFetch<GateStatus>("gate")) ?? MOCK_STATUS.gate;
 }
 
 export async function getAI(): Promise<AIStatus> {
-  return (await tryFetch<AIStatus>("/api/ai")) ?? MOCK_STATUS.ai;
+  return (await botFetch<AIStatus>("ai")) ?? MOCK_STATUS.ai;
 }
 
 export async function setMode(mode: Mode): Promise<void> {
-  if (USE_MOCK) return;
-  await fetch(`${BASE}/api/mode`, {
+  await botMutate("mode", {
     method: "POST",
-    headers: authHeaders({ "content-type": "application/json" }),
     body: JSON.stringify({ mode }),
   });
 }
@@ -158,59 +158,28 @@ export async function toggleExchange(
   id: ExchangeId,
   enabled: boolean
 ): Promise<void> {
-  if (USE_MOCK) return;
-  await fetch(`${BASE}/api/exchanges/${id}/toggle`, {
+  await botMutate(`exchanges/${id}/toggle`, {
     method: "POST",
-    headers: authHeaders({ "content-type": "application/json" }),
     body: JSON.stringify({ enabled }),
   });
 }
 
-// ----- credentials -----
-
-const MOCK_CREDENTIALS: CredentialsState = {
-  binance: {
-    provider: "binance",
-    configured: false,
-    last_updated: null,
-    last_tested: null,
-    test_result: null,
-    test_message: null,
-    withdraw_enabled: null,
-    trade_enabled: null,
-  },
-  mb: {
-    provider: "mb",
-    configured: false,
-    last_updated: null,
-    last_tested: null,
-    test_result: null,
-    test_message: null,
-    withdraw_enabled: null,
-    trade_enabled: null,
-  },
-  anthropic: {
-    provider: "anthropic",
-    configured: false,
-    last_updated: null,
-    last_tested: null,
-    test_result: null,
-    test_message: null,
-    withdraw_enabled: null,
-    trade_enabled: null,
-  },
-};
+// ----- credentials -------------------------------------------------------
 
 export async function getCredentials(): Promise<CredentialsState> {
   return (
-    (await tryFetch<CredentialsState>("/api/credentials")) ?? MOCK_CREDENTIALS
+    (await botFetch<CredentialsState>("credentials")) ?? {
+      binance:   { provider: "binance",   configured: false, last_updated: null, last_tested: null, test_result: null, test_message: null, withdraw_enabled: null, trade_enabled: null },
+      mb:        { provider: "mb",        configured: false, last_updated: null, last_tested: null, test_result: null, test_message: null, withdraw_enabled: null, trade_enabled: null },
+      anthropic: { provider: "anthropic", configured: false, last_updated: null, last_tested: null, test_result: null, test_message: null, withdraw_enabled: null, trade_enabled: null },
+    }
   );
 }
 
 export interface SaveCredentialPayload {
   provider: ProviderId;
   api_key: string;
-  api_secret?: string; // anthropic only uses api_key
+  api_secret?: string;
 }
 
 export interface SaveCredentialResponse {
@@ -222,50 +191,25 @@ export interface SaveCredentialResponse {
 export async function saveCredential(
   payload: SaveCredentialPayload
 ): Promise<SaveCredentialResponse> {
-  if (USE_MOCK) {
-    // Simulate latency + a basic length check
-    await new Promise((r) => setTimeout(r, 600));
-    if (payload.api_key.length < 16) {
-      return { ok: false, message: "API key looks too short — please double-check." };
-    }
-    return {
-      ok: true,
-      message:
-        "Saved (mock). When the bot backend is online this will encrypt and persist the key on the server.",
-    };
-  }
-  const res = await fetch(`${BASE}/api/credentials`, {
+  return botMutate<SaveCredentialResponse>("credentials", {
     method: "POST",
-    headers: authHeaders({ "content-type": "application/json" }),
     body: JSON.stringify(payload),
   });
-  return (await res.json()) as SaveCredentialResponse;
 }
 
 export async function testCredential(
   provider: ProviderId
 ): Promise<SaveCredentialResponse> {
-  if (USE_MOCK) {
-    await new Promise((r) => setTimeout(r, 800));
-    return { ok: false, message: "Bot backend offline (mock mode)." };
-  }
-  const res = await fetch(`${BASE}/api/credentials/${provider}/test`, {
+  return botMutate<SaveCredentialResponse>(`credentials/${provider}/test`, {
     method: "POST",
-    headers: authHeaders(),
+    body: JSON.stringify({}),
   });
-  return (await res.json()) as SaveCredentialResponse;
 }
 
 export async function deleteCredential(
   provider: ProviderId
 ): Promise<SaveCredentialResponse> {
-  if (USE_MOCK) {
-    await new Promise((r) => setTimeout(r, 300));
-    return { ok: true, message: "Cleared (mock)." };
-  }
-  const res = await fetch(`${BASE}/api/credentials/${provider}`, {
+  return botMutate<SaveCredentialResponse>(`credentials/${provider}`, {
     method: "DELETE",
-    headers: authHeaders(),
   });
-  return (await res.json()) as SaveCredentialResponse;
 }
