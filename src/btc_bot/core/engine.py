@@ -99,7 +99,7 @@ class Engine:
         self._paused = False
         self._pause_reason = ""
 
-    async def tick(self, mode: Mode = Mode.paper) -> None:
+    async def tick(self, mode: Mode = Mode.PAPER) -> None:
         """Run one tick. Called every timeframe interval by the scheduler."""
         self._daily.reset_if_new_day()
 
@@ -194,7 +194,7 @@ class Engine:
         )
 
         # --- 6. Execute (skip in backtest / paper if engine is called in dry-run) ---
-        if mode == Mode.backtest:
+        if mode == Mode.BACKTEST:
             log.info("[%s] backtest mode — no order sent", self.exchange.name)
             self._daily.ops += 1
             return
@@ -205,7 +205,7 @@ class Engine:
             log.error("[%s] place_market_order failed: %s", self.exchange.name, exc)
             return
 
-        if mode == Mode.paper:
+        if mode == Mode.PAPER:
             log.info("[%s] paper mode — entry logged, no OCO placed", self.exchange.name)
             self._position = OpenPosition(
                 exchange=self.exchange.name,
