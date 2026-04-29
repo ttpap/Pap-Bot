@@ -217,6 +217,8 @@ class Engine:
                 entry_order_id=entry_order.id,
             )
             self._daily.ops += 1
+            from datetime import date
+            self.risk.record_fill(date.today(), Decimal(0))  # count op, pnl unknown until close
             return
 
         # Live: place OCO
@@ -270,6 +272,8 @@ class Engine:
             pnl = self._calc_pnl(pos, exit_price)
             self.bankroll += pnl
             self._daily.realized_pnl += pnl
+            from datetime import date
+            self.risk.record_fill(date.today(), pnl)
             log.info(
                 "[%s] position closed pnl=%+.4f bankroll=%s",
                 self.exchange.name, float(pnl), self.bankroll,
